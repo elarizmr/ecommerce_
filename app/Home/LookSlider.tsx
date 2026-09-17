@@ -20,7 +20,7 @@ export default function LookSlider() {
           {loopedLooks.map((look, i) => (
             <div
               key={i}
-              className="flex-shrink-0 w-[70vw] sm:w-[24vw] aspect-[3/4] relative"
+              className="flex-shrink-0 w-[70vw] sm:w-[24vw] aspect-[4/8] relative"
             >
               <img
                 src={look.image}

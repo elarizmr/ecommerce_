@@ -1,22 +1,30 @@
 // app/layout.tsx
-'use client';
+// DİQQƏT: burada 'use client' YOXDUR — bu fayl server komponentdir,
+// ona görə `metadata` export etmək tamamilə qanunidir.
 
-import { useState } from 'react';
-import Header from './components/Header';
-import MorphingLogo from './components/MorphingLogo';
-import MobileMenu from './components/MobileMenu';
-import './globals.css';
-import Footer from './components/Footer';
+import type { Metadata } from "next";
+import "./globals.css";
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
-  const [menuOpen, setMenuOpen] = useState(false);
+import SiteChrome from "./components/SiteChrome";
+import Footer from "./components/Footer";
 
+export const metadata: Metadata = {
+  title: "OLAF",
+  description: "OLAF Hussein",
+};
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <html lang="en">
       <body>
-        <Header onMenuClick={() => setMenuOpen(true)} />
-        <MorphingLogo />
-        <MobileMenu open={menuOpen} onClose={() => setMenuOpen(false)} />
+       
+        {/* Header + MorphingLogo + MobileMenu və onların state-i
+            SiteChrome-un (client component) içindədir. */}
+        <SiteChrome />
         {children}
         <Footer />
       </body>
