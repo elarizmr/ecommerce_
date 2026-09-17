@@ -13,8 +13,8 @@ const ProductSchema = new Schema(
     name: { type: String, required: true },
     price: { type: Number, required: true },
     description: String,
-    image: String, // əsas/kart şəkli (siyahıda görünən)
-    stock: { type: Number, default: 0 },
+    image: [{ type: String }], // Artıq tək string yox, şəkillər massividir (maks 6 ədəd)
+   stock: { type: Number, default: 0 }, 
 
     sizes: [{ type: String }], // məs: ["XS","S","M","L","XL"]
     colors: [ColorVariantSchema],

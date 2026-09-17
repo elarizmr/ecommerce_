@@ -3,9 +3,13 @@ import { useEffect, useState } from "react";
 
 const ALL_SIZES = ["XS", "S", "M", "L", "XL"];
 
+// Cloudinary məlumatları
+const CLOUD_NAME = "pjjvvrbv";
+const UPLOAD_PRESET = "olar_preset";
+
 type ColorVariant = {
   name: string;
-  images: string[]; // bu rəngə aid şəkil URL-ləri
+  images: string[];
 };
 
 type Product = {
@@ -13,7 +17,7 @@ type Product = {
   name: string;
   price: number;
   description?: string;
-  image?: string; // əsas/kart şəkli
+  image?: string[]; // Massivə dəyişdirildi (maks 6 ədəd)
   stock: number;
   sizes: string[];
   colors: ColorVariant[];
@@ -28,7 +32,7 @@ const emptyForm = {
   name: "",
   price: "",
   description: "",
-  image: "",
+  image: [] as string[], // Boş massiv
   stock: "",
   sizes: [] as string[],
   colors: [] as ColorVariant[],
@@ -43,15 +47,35 @@ export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
 
   async function loadProducts() {
-    const res = await fetch("/api/admin/products");
+    const res = await fetch("/api/admin/products", { cache: "no-store" });
     setProducts(await res.json());
   }
 
   useEffect(() => {
     loadProducts();
   }, []);
+
+  // Şəkil faylını Cloudinary-ə yükləyən ümumi funksiya
+  async function uploadToCloudinary(file: File): Promise<string> {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("upload_preset", UPLOAD_PRESET);
+
+    const res = await fetch(
+      `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`,
+      {
+        method: "POST",
+        body: formData,
+      }
+    );
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error?.message || "Şəkil yüklənmədi");
+    return data.secure_url;
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -60,6 +84,7 @@ export default function ProductsPage() {
       price: Number(form.price),
       stock: Number(form.stock) || 0,
       points: Number(form.points) || 0,
+      image: form.image.filter((img) => img.trim() !== ""), // Boş linkləri təmizləyirik
       colors: form.colors
         .filter((c) => c.name.trim() !== "")
         .map((c) => ({ ...c, images: c.images.filter((i) => i.trim() !== "") })),
@@ -71,6 +96,7 @@ export default function ProductsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
+      setEditingId(null);
     } else {
       await fetch("/api/admin/products", {
         method: "POST",
@@ -80,7 +106,6 @@ export default function ProductsPage() {
     }
 
     setForm(emptyForm);
-    setEditingId(null);
     loadProducts();
   }
 
@@ -96,7 +121,7 @@ export default function ProductsPage() {
       name: p.name,
       price: String(p.price),
       description: p.description || "",
-      image: p.image || "",
+      image: Array.isArray(p.image) ? p.image : p.image ? [p.image] : [],
       stock: String(p.stock ?? ""),
       sizes: p.sizes || [],
       colors: p.colors?.length ? p.colors : [],
@@ -113,7 +138,7 @@ export default function ProductsPage() {
     setForm(emptyForm);
   }
 
-  // --- ölçülər ---
+  // Ölçülər
   function toggleSize(size: string) {
     setForm((prev) => ({
       ...prev,
@@ -123,7 +148,7 @@ export default function ProductsPage() {
     }));
   }
 
-  // --- rənglər ---
+  // Rənglər və Şəkillər
   function addColor() {
     setForm({ ...form, colors: [...form.colors, { name: "", images: [""] }] });
   }
@@ -135,18 +160,30 @@ export default function ProductsPage() {
     next[index] = { ...next[index], name: value };
     setForm({ ...form, colors: next });
   }
+
+  async function handleColorImageFile(colorIndex: number, imgIndex: number, file: File) {
+    try {
+      setUploading(true);
+      const url = await uploadToCloudinary(file);
+      const next = [...form.colors];
+      const imgs = [...next[colorIndex].images];
+      imgs[imgIndex] = url;
+      next[colorIndex] = { ...next[colorIndex], images: imgs };
+      setForm({ ...form, colors: next });
+    } catch (err) {
+      alert("Şəkil yüklənərkən xəta baş verdi!");
+      console.error(err);
+    } finally {
+      setUploading(false);
+    }
+  }
+
   function addColorImage(index: number) {
     const next = [...form.colors];
     next[index] = { ...next[index], images: [...next[index].images, ""] };
     setForm({ ...form, colors: next });
   }
-  function updateColorImage(colorIndex: number, imgIndex: number, value: string) {
-    const next = [...form.colors];
-    const imgs = [...next[colorIndex].images];
-    imgs[imgIndex] = value;
-    next[colorIndex] = { ...next[colorIndex], images: imgs };
-    setForm({ ...form, colors: next });
-  }
+
   function removeColorImage(colorIndex: number, imgIndex: number) {
     const next = [...form.colors];
     next[colorIndex] = {
@@ -163,72 +200,172 @@ export default function ProductsPage() {
     <div>
       <h1 className="text-2xl font-semibold mb-6">Məhsullar</h1>
 
+      {uploading && (
+        <div className="mb-4 text-sm text-blue-600 font-medium">
+          Şəkil buluda yüklənir, zəhmət olmasa gözləyin...
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="flex flex-col gap-4 max-w-md mb-8">
-        <input
-          className={inputClass}
-          placeholder="Ad"
-          value={form.name}
-          onChange={(e) => setForm({ ...form, name: e.target.value })}
-          required
-        />
-        <input
-          className={inputClass}
-          placeholder="Qiymət"
-          type="number"
-          value={form.price}
-          onChange={(e) => setForm({ ...form, price: e.target.value })}
-          required
-        />
-        <input
-          className={inputClass}
-          placeholder="Stok"
-          type="number"
-          value={form.stock}
-          onChange={(e) => setForm({ ...form, stock: e.target.value })}
-        />
-        <input
-          className={inputClass}
-          placeholder="Əsas/kart şəkli URL"
-          value={form.image}
-          onChange={(e) => setForm({ ...form, image: e.target.value })}
-        />
-        <input
-          className={inputClass}
-          placeholder="Bonus xal (points)"
-          type="number"
-          value={form.points}
-          onChange={(e) => setForm({ ...form, points: e.target.value })}
-        />
-        <textarea
-          className={inputClass}
-          placeholder="Qısa açıqlama"
-          value={form.description}
-          onChange={(e) => setForm({ ...form, description: e.target.value })}
-        />
-        <textarea
-          className={inputClass}
-          placeholder="Information bölməsi"
-          value={form.information}
-          onChange={(e) => setForm({ ...form, information: e.target.value })}
-        />
-        <textarea
-          className={inputClass}
-          placeholder="Model info"
-          value={form.modelInfo}
-          onChange={(e) => setForm({ ...form, modelInfo: e.target.value })}
-        />
-        <textarea
-          className={inputClass}
-          placeholder="Material info"
-          value={form.materialInfo}
-          onChange={(e) => setForm({ ...form, materialInfo: e.target.value })}
-        />
-        <textarea
-          className={inputClass}
-          placeholder="Shipping & Returns"
-          value={form.shippingReturns}
-          onChange={(e) => setForm({ ...form, shippingReturns: e.target.value })}
-        />
+        <div>
+          <label className="text-xs text-neutral-500 block mb-1">Məhsulun Adı</label>
+          <input
+            className={inputClass}
+            placeholder="Ad"
+            value={form.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+            required
+          />
+        </div>
+
+        <div>
+          <label className="text-xs text-neutral-500 block mb-1">Qiymət (AZN)</label>
+          <input
+            className={inputClass}
+            placeholder="Qiymət"
+            type="number"
+            value={form.price}
+            onChange={(e) => setForm({ ...form, price: e.target.value })}
+            required
+          />
+        </div>
+
+        <div>
+          <label className="text-xs text-neutral-500 block mb-1">Stok Miqdarı</label>
+          <input
+            className={inputClass}
+            placeholder="Stok"
+            type="number"
+            value={form.stock}
+            onChange={(e) => setForm({ ...form, stock: e.target.value })}
+          />
+        </div>
+
+        {/* Əsas Şəkillər (Maksimum 6 ədəd) */}
+        <div>
+          <label className="text-xs text-neutral-500 block mb-1">Əsas Şəkillər (Maksimum 6 ədəd)</label>
+          <div className="flex flex-col gap-2">
+            {form.image.map((imgUrl, imgIndex) => (
+              <div key={imgIndex} className="flex items-center gap-2 border border-neutral-200 p-2 rounded-lg">
+                <input
+                  type="file"
+                  accept="image/*"
+                  className={inputClass}
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      try {
+                        setUploading(true);
+                        const url = await uploadToCloudinary(file);
+                        const nextImages = [...form.image];
+                        nextImages[imgIndex] = url;
+                        setForm({ ...form, image: nextImages });
+                      } catch (err) {
+                        alert("Şəkil yüklənmədi");
+                      } finally {
+                        setUploading(false);
+                      }
+                    }
+                  }}
+                />
+                {imgUrl && (
+                  <img src={imgUrl} alt="Preview" className="w-10 h-10 object-cover rounded-md flex-shrink-0" />
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const nextImages = form.image.filter((_, i) => i !== imgIndex);
+                    setForm({ ...form, image: nextImages });
+                  }}
+                  className="text-red-600 text-xs px-2 py-1"
+                >
+                  Sil
+                </button>
+              </div>
+            ))}
+
+            {form.image.length < 6 && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (form.image.length < 6) {
+                    setForm({ ...form, image: [...form.image, ""] });
+                  }
+                }}
+                className="text-xs text-blue-600 self-start mt-1 font-medium"
+              >
+                + Şəkil əlavə et ({form.image.length}/6)
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Bonus Xal */}
+        <div>
+          <label className="text-xs text-neutral-500 block mb-1">Bonus xal (points)</label>
+          <input
+            className={inputClass}
+            placeholder="Bonus xal"
+            type="number"
+            value={form.points}
+            onChange={(e) => setForm({ ...form, points: e.target.value })}
+          />
+        </div>
+
+        {/* Qısa Açıqlama */}
+        <div>
+          <label className="text-xs text-neutral-500 block mb-1">Qısa açıqlama</label>
+          <textarea
+            className={inputClass}
+            placeholder="Qısa açıqlama"
+            value={form.description}
+            onChange={(e) => setForm({ ...form, description: e.target.value })}
+          />
+        </div>
+
+        {/* Information */}
+        <div>
+          <label className="text-xs text-neutral-500 block mb-1">Information</label>
+          <textarea
+            className={inputClass}
+            placeholder="Information bölməsi"
+            value={form.information}
+            onChange={(e) => setForm({ ...form, information: e.target.value })}
+          />
+        </div>
+
+        {/* Model Info */}
+        <div>
+          <label className="text-xs text-neutral-500 block mb-1">Model info</label>
+          <textarea
+            className={inputClass}
+            placeholder="Model info"
+            value={form.modelInfo}
+            onChange={(e) => setForm({ ...form, modelInfo: e.target.value })}
+          />
+        </div>
+
+        {/* Material Info */}
+        <div>
+          <label className="text-xs text-neutral-500 block mb-1">Material info</label>
+          <textarea
+            className={inputClass}
+            placeholder="Material info"
+            value={form.materialInfo}
+            onChange={(e) => setForm({ ...form, materialInfo: e.target.value })}
+          />
+        </div>
+
+        {/* Shipping & Returns */}
+        <div>
+          <label className="text-xs text-neutral-500 block mb-1">Shipping & Returns</label>
+          <textarea
+            className={inputClass}
+            placeholder="Shipping & Returns"
+            value={form.shippingReturns}
+            onChange={(e) => setForm({ ...form, shippingReturns: e.target.value })}
+          />
+        </div>
 
         {/* Ölçülər */}
         <div>
@@ -251,9 +388,9 @@ export default function ProductsPage() {
           </div>
         </div>
 
-        {/* Rənglər */}
+        {/* Rənglər və Şəkillər */}
         <div>
-          <label className="text-sm font-medium block mb-2">Rənglər</label>
+          <label className="text-sm font-medium block mb-2">Rənglər və Şəkillər</label>
           <div className="flex flex-col gap-4">
             {form.colors.map((c, ci) => (
               <div key={ci} className="border border-neutral-200 rounded-lg p-3">
@@ -275,20 +412,29 @@ export default function ProductsPage() {
 
                 <div className="flex flex-col gap-2 pl-3 border-l border-neutral-200">
                   {c.images.map((img, ii) => (
-                    <div key={ii} className="flex gap-2">
+                    <div key={ii} className="flex flex-col gap-1 mb-2">
                       <input
+                        type="file"
+                        accept="image/*"
                         className={inputClass}
-                        placeholder={`Şəkil URL ${ii + 1}`}
-                        value={img}
-                        onChange={(e) => updateColorImage(ci, ii, e.target.value)}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleColorImageFile(ci, ii, file);
+                        }}
                       />
+                      {img && (
+                        <div className="flex items-center gap-2">
+                          <img src={img} alt="Color preview" className="w-10 h-10 object-cover rounded" />
+                          <span className="text-xs text-neutral-400 truncate max-w-[200px]">{img}</span>
+                        </div>
+                      )}
                       {c.images.length > 1 && (
                         <button
                           type="button"
                           onClick={() => removeColorImage(ci, ii)}
-                          className="text-red-600 text-xs px-2"
+                          className="text-red-600 text-xs self-start"
                         >
-                          Sil
+                          Şəkli sil
                         </button>
                       )}
                     </div>
@@ -296,7 +442,7 @@ export default function ProductsPage() {
                   <button
                     type="button"
                     onClick={() => addColorImage(ci)}
-                    className="text-xs text-blue-600 self-start"
+                    className="text-xs text-blue-600 self-start mt-1"
                   >
                     + Şəkil əlavə et
                   </button>
@@ -307,16 +453,17 @@ export default function ProductsPage() {
           <button
             type="button"
             onClick={addColor}
-            className="text-xs text-blue-600 mt-2"
+            className="text-xs text-blue-600 mt-2 font-medium"
           >
             + Rəng əlavə et
           </button>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex gap-2 mt-2">
           <button
             type="submit"
-            className="bg-neutral-900 text-white rounded-lg px-4 py-2 text-sm hover:opacity-85"
+            disabled={uploading}
+            className="bg-neutral-900 text-white rounded-lg px-4 py-2 text-sm hover:opacity-85 disabled:opacity-50"
           >
             {editingId ? "Yenilə" : "Əlavə et"}
           </button>
@@ -332,6 +479,7 @@ export default function ProductsPage() {
         </div>
       </form>
 
+      {/* Cədvəl */}
       <div className="overflow-x-auto">
         <table className="w-full min-w-[600px] bg-white border border-neutral-200 rounded-lg overflow-hidden text-sm">
           <thead className="bg-neutral-100">
@@ -339,6 +487,7 @@ export default function ProductsPage() {
               <th className="text-left p-3">Ad</th>
               <th className="text-left p-3">Qiymət</th>
               <th className="text-left p-3">Stok</th>
+              <th className="text-left p-3">Bonus Xal</th>
               <th className="text-left p-3">Ölçülər</th>
               <th className="text-left p-3">Rənglər</th>
               <th className="text-left p-3">Əməliyyat</th>
@@ -347,9 +496,10 @@ export default function ProductsPage() {
           <tbody>
             {products.map((p) => (
               <tr key={p._id} className="border-t border-neutral-200">
-                <td className="p-3">{p.name}</td>
+                <td className="p-3 font-medium">{p.name}</td>
                 <td className="p-3">{p.price} AZN</td>
                 <td className="p-3">{p.stock}</td>
+                <td className="p-3">{p.points ?? 0} xal</td>
                 <td className="p-3">{p.sizes?.join(", ")}</td>
                 <td className="p-3">{p.colors?.map((c) => c.name).join(", ")}</td>
                 <td className="p-3 space-x-2">
