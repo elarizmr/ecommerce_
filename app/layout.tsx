@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 import ConditionalChrome, { ConditionalFooter } from "./components/ConditionalChrome";
+import Providers from "./providers";
 
 export const metadata: Metadata = {
   title: "OLAF",
@@ -16,9 +17,11 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <ConditionalChrome />
-        {children}
-        <ConditionalFooter />
+        <Providers>
+          <ConditionalChrome />
+          {children}
+          <ConditionalFooter />
+        </Providers>
       </body>
     </html>
   );

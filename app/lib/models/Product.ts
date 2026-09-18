@@ -12,6 +12,8 @@ const ProductSchema = new Schema(
   {
     name: { type: String, required: true },
     price: { type: Number, required: true },
+    section: { type: String, enum: ["men", "women", "accessories"], required: true }, // YENİ
+    subcategory: { type: String, required: true }, // YENİ, məs: "jackets"
     description: String,
     image: [{ type: String }], // Artıq tək string yox, şəkillər massividir (maks 6 ədəd)
    stock: { type: Number, default: 0 }, 

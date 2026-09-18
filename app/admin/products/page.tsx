@@ -1,5 +1,14 @@
 "use client";
-import { useEffect, useState } from "react";
+import { CATEGORIES, slugify } from "@/app/lib/categories";
+import { useState } from "react";
+import {
+  useProducts,
+  useCreateProduct,
+  useUpdateProduct,
+  useDeleteProduct,
+  type Product,
+  type ColorVariant,
+} from "./useProducts";
 
 const ALL_SIZES = ["XS", "S", "M", "L", "XL"];
 
@@ -7,32 +16,13 @@ const ALL_SIZES = ["XS", "S", "M", "L", "XL"];
 const CLOUD_NAME = "pjjvvrbv";
 const UPLOAD_PRESET = "olar_preset";
 
-type ColorVariant = {
-  name: string;
-  images: string[];
-};
-
-type Product = {
-  _id: string;
-  name: string;
-  price: number;
-  description?: string;
-  image?: string[]; // Massivə dəyişdirildi (maks 6 ədəd)
-  stock: number;
-  sizes: string[];
-  colors: ColorVariant[];
-  information?: string;
-  modelInfo?: string;
-  materialInfo?: string;
-  shippingReturns?: string;
-  points?: number;
-};
-
 const emptyForm = {
   name: "",
   price: "",
+  section: "men" as "men" | "women" | "accessories",
+  subcategory: "",
   description: "",
-  image: [] as string[], // Boş massiv
+  image: [] as string[],
   stock: "",
   sizes: [] as string[],
   colors: [] as ColorVariant[],
@@ -44,21 +34,15 @@ const emptyForm = {
 };
 
 export default function ProductsPage() {
-  const [products, setProducts] = useState<Product[]>([]);
+  const { data: products = [], isLoading } = useProducts();
+  const createProduct = useCreateProduct();
+  const updateProduct = useUpdateProduct();
+  const deleteProduct = useDeleteProduct();
+
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
 
-  async function loadProducts() {
-    const res = await fetch("/api/admin/products", { cache: "no-store" });
-    setProducts(await res.json());
-  }
-
-  useEffect(() => {
-    loadProducts();
-  }, []);
-
-  // Şəkil faylını Cloudinary-ə yükləyən ümumi funksiya
   async function uploadToCloudinary(file: File): Promise<string> {
     const formData = new FormData();
     formData.append("file", file);
@@ -84,42 +68,50 @@ export default function ProductsPage() {
       price: Number(form.price),
       stock: Number(form.stock) || 0,
       points: Number(form.points) || 0,
-      image: form.image.filter((img) => img.trim() !== ""), // Boş linkləri təmizləyirik
+      image: form.image.filter((img) => img.trim() !== ""),
       colors: form.colors
         .filter((c) => c.name.trim() !== "")
         .map((c) => ({ ...c, images: c.images.filter((i) => i.trim() !== "") })),
     };
 
-    if (editingId) {
-      await fetch(`/api/admin/products/${editingId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      setEditingId(null);
-    } else {
-      await fetch("/api/admin/products", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+    try {
+      if (editingId) {
+        await updateProduct.mutateAsync({ id: editingId, payload });
+        setEditingId(null);
+      } else {
+        await createProduct.mutateAsync(payload);
+      }
+      setForm(emptyForm);
+    } catch (err) {
+      alert("Əməliyyat uğursuz oldu");
+      console.error(err);
     }
-
-    setForm(emptyForm);
-    loadProducts();
   }
 
   async function handleDelete(id: string) {
     if (!confirm("Silinsin?")) return;
-    await fetch(`/api/admin/products/${id}`, { method: "DELETE" });
-    loadProducts();
+    try {
+      await deleteProduct.mutateAsync(id);
+    } catch (err) {
+      alert("Silinmə uğursuz oldu");
+      console.error(err);
+    }
   }
 
   function handleEdit(p: Product) {
     setEditingId(p._id);
+    
+    // Bazadan gələn subcategory-ni CATEGORIES siyahısındakı orijinal adla uyğunlaşdırırıq
+    const currentSection = p.section || "men";
+    const matchedCategory = CATEGORIES[currentSection]?.find(
+      (c) => c.toLowerCase() === (p.subcategory || "").toLowerCase() || slugify(c) === (p.subcategory || "").toLowerCase()
+    ) || p.subcategory || "";
+
     setForm({
       name: p.name,
       price: String(p.price),
+      section: currentSection,
+      subcategory: matchedCategory,
       description: p.description || "",
       image: Array.isArray(p.image) ? p.image : p.image ? [p.image] : [],
       stock: String(p.stock ?? ""),
@@ -138,7 +130,6 @@ export default function ProductsPage() {
     setForm(emptyForm);
   }
 
-  // Ölçülər
   function toggleSize(size: string) {
     setForm((prev) => ({
       ...prev,
@@ -148,7 +139,6 @@ export default function ProductsPage() {
     }));
   }
 
-  // Rənglər və Şəkillər
   function addColor() {
     setForm({ ...form, colors: [...form.colors, { name: "", images: [""] }] });
   }
@@ -196,6 +186,12 @@ export default function ProductsPage() {
   const inputClass =
     "border border-neutral-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-neutral-900 w-full";
 
+  const submitting = createProduct.isPending || updateProduct.isPending;
+
+  if (isLoading) {
+    return <p className="p-6 text-sm text-neutral-500">Yüklənir...</p>;
+  }
+
   return (
     <div>
       <h1 className="text-2xl font-semibold mb-6">Məhsullar</h1>
@@ -216,6 +212,44 @@ export default function ProductsPage() {
             onChange={(e) => setForm({ ...form, name: e.target.value })}
             required
           />
+        </div>
+
+        {/* Bölmə */}
+        <div>
+          <label className="text-xs text-neutral-500 block mb-1">Bölmə</label>
+          <select
+            className={inputClass}
+            value={form.section}
+            onChange={(e) =>
+              setForm({
+                ...form,
+                section: e.target.value as "men" | "women" | "accessories",
+                subcategory: "",
+              })
+            }
+          >
+            <option value="men">Men</option>
+            <option value="women">Women</option>
+            <option value="accessories">Accessories</option>
+          </select>
+        </div>
+
+        {/* Kateqoriya */}
+        <div>
+          <label className="text-xs text-neutral-500 block mb-1">Kateqoriya</label>
+          <select
+            className={inputClass}
+            value={form.subcategory}
+            onChange={(e) => setForm({ ...form, subcategory: e.target.value })}
+            required
+          >
+            <option value="">Seç...</option>
+            {CATEGORIES[form.section].map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
         </div>
 
         <div>
@@ -462,10 +496,10 @@ export default function ProductsPage() {
         <div className="flex gap-2 mt-2">
           <button
             type="submit"
-            disabled={uploading}
+            disabled={uploading || submitting}
             className="bg-neutral-900 text-white rounded-lg px-4 py-2 text-sm hover:opacity-85 disabled:opacity-50"
           >
-            {editingId ? "Yenilə" : "Əlavə et"}
+            {submitting ? "Göndərilir..." : editingId ? "Yenilə" : "Əlavə et"}
           </button>
           {editingId && (
             <button
@@ -481,10 +515,11 @@ export default function ProductsPage() {
 
       {/* Cədvəl */}
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[600px] bg-white border border-neutral-200 rounded-lg overflow-hidden text-sm">
+        <table className="w-full min-w-[700px] bg-white border border-neutral-200 rounded-lg overflow-hidden text-sm">
           <thead className="bg-neutral-100">
             <tr>
               <th className="text-left p-3">Ad</th>
+              <th className="text-left p-3">Kateqoriya</th>
               <th className="text-left p-3">Qiymət</th>
               <th className="text-left p-3">Stok</th>
               <th className="text-left p-3">Bonus Xal</th>
@@ -497,6 +532,9 @@ export default function ProductsPage() {
             {products.map((p) => (
               <tr key={p._id} className="border-t border-neutral-200">
                 <td className="p-3 font-medium">{p.name}</td>
+                <td className="p-3 text-xs text-neutral-500">
+                  {p.section} / {p.subcategory}
+                </td>
                 <td className="p-3">{p.price} AZN</td>
                 <td className="p-3">{p.stock}</td>
                 <td className="p-3">{p.points ?? 0} xal</td>
@@ -511,7 +549,8 @@ export default function ProductsPage() {
                   </button>
                   <button
                     onClick={() => handleDelete(p._id)}
-                    className="bg-red-600 text-white px-3 py-1 rounded-md text-xs hover:opacity-85"
+                    disabled={deleteProduct.isPending}
+                    className="bg-red-600 text-white px-3 py-1 rounded-md text-xs hover:opacity-85 disabled:opacity-50"
                   >
                     Sil
                   </button>
