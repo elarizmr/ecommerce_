@@ -52,7 +52,7 @@ export default function ProductPage() {
 
   const images = product?.image?.length ? product.image : [];
 
-  // Scroll ilə hansı şəkilin görünən olduğunu izləyirik (01/06 sayğacı + thumbnail highlight üçün)
+  // Hansı şəkilin görünən olduğunu izləyirik (sayğac + thumbnail highlight üçün)
   useEffect(() => {
     if (!images.length) return;
 
@@ -112,7 +112,7 @@ export default function ProductPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-[64px_minmax(0,1.6fr)_minmax(0,1fr)] gap-4 lg:gap-8">
-        {/* Thumbnail sütunu — sticky, scroll ilə aktiv şəkil highlight olunur */}
+        {/* Thumbnail sütunu: yalnız kompüterdə, sticky, scroll ilə aktiv şəkil highlight olunur */}
         <div className="hidden md:flex flex-col gap-2 sticky top-24 self-start h-fit">
           {images.map((img, i) => (
             <button
@@ -130,32 +130,35 @@ export default function ProductPage() {
           </div>
         </div>
 
-        {/* Bütün şəkillər alt-alta — scroll etdikcə aşağı enir */}
-        <div className="flex flex-col gap-3">
-          {images.map((img, i) => (
-            <div
-              key={i}
-              ref={(el) => {
-                imageRefs.current[i] = el;
-              }}
-              className="bg-[#E5E5E5] aspect-[3/4] overflow-hidden"
-            >
-              <img
-                src={img}
-                alt={`${product.name} ${i + 1}`}
-                className="w-full h-full object-cover"
-              />
-            </div>
-          ))}
+        {/* Şəkillər: mobildə sağa-sola sürüşür, kompüterdə alt-alta düzülür */}
+        <div className="min-w-0">
+          <div className="-mx-4 md:mx-0 flex md:flex-col gap-1 md:gap-3 overflow-x-auto md:overflow-visible snap-x snap-mandatory md:snap-none [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {images.map((img, i) => (
+              <div
+                key={i}
+                ref={(el) => {
+                  imageRefs.current[i] = el;
+                }}
+                className="w-full shrink-0 snap-center bg-[#E5E5E5] aspect-[3/4] overflow-hidden"
+              >
+                <img
+                  src={img}
+                  alt={`${product.name} ${i + 1}`}
+                  draggable={false}
+                  className="w-full h-full object-cover select-none"
+                />
+              </div>
+            ))}
+          </div>
 
-          {/* Mobil üçün sayğac (thumbnail sütunu gizli olanda) */}
-          <div className="md:hidden text-[10px] tracking-wider text-gray-500">
+          {/* Mobil üçün sayğac */}
+          <div className="md:hidden mt-2 text-[10px] tracking-wider text-gray-500">
             {String(activeImage + 1).padStart(2, '0')} / {String(images.length).padStart(2, '0')}
           </div>
         </div>
 
-        {/* Məlumat — sticky, son şəkillə bərabər bitir */}
-        <div className="text-black md:max-w-md sticky top-24 self-start h-fit">
+        {/* Məlumat: sticky yalnız kompüterdə */}
+        <div className="text-black md:max-w-md md:sticky md:top-24 md:self-start h-fit">
           <h1 className="text-lg font-bold uppercase tracking-tight">{product.name}</h1>
           <p className="text-sm font-medium mt-1">M.{Number(product.price).toFixed(2)}</p>
           {product.description && (
