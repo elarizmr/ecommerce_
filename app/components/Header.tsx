@@ -154,6 +154,32 @@ export default function Header({
     if (searchOpen) inputRef.current?.focus();
   }, [searchOpen]);
 
+  // Mobil menyudakı SEARCH bəndi window.dispatchEvent(new Event('open-search'))
+  // çağıranda axtarış paneli açılır
+  useEffect(() => {
+    const onOpenSearch = () => {
+      setActiveSections(null);
+      setActiveLink(null);
+      setSearchOpen(true);
+    };
+
+    window.addEventListener('open-search', onOpenSearch);
+    return () => window.removeEventListener('open-search', onOpenSearch);
+  }, []);
+
+  // Mobildə axtarış açıqkən arxadakı səhifə sürüşməsin
+  useEffect(() => {
+    if (!searchOpen) return;
+    if (!window.matchMedia('(max-width: 767px)').matches) return;
+
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [searchOpen]);
+
   // Yazdıqca (debounce ilə) məhsulları gətir
   useEffect(() => {
     const q = query.trim();
@@ -317,7 +343,7 @@ export default function Header({
           className="flex items-center min-w-[120px] md:w-1/4 md:px-2.5"
           onMouseEnter={closeMenu}
         >
-          {!isHome && (
+          {(!isHome || searchOpen) && (
             <Link
               href="/"
               className={`
@@ -328,6 +354,7 @@ export default function Header({
                 transition-colors
                 duration-300
                 ${solid ? 'text-black' : 'text-white'}
+                ${isHome ? 'md:hidden' : ''}
               `}
             >
               OLAF
@@ -428,26 +455,48 @@ export default function Header({
         ================================================== */}
 
         <div className="flex md:hidden items-center gap-4">
-          {/* Hamburger */}
+          {/* Axtarış açıqdırsa hamburger əvəzinə bağlama (X) düyməsi.
+              Axtarışı mobil menyudakı SEARCH bəndi açır. */}
 
-          <button
-            onClick={onMenuClick}
-            aria-label="Menu"
-            className="text-black"
-          >
-            <svg
-              width="22"
-              height="22"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
+          {searchOpen ? (
+            <button
+              type="button"
+              onClick={closeSearch}
+              aria-label="Close search"
+              className="text-black"
             >
-              <line x1="3" y1="6" x2="21" y2="6" />
-              <line x1="3" y1="12" x2="21" y2="12" />
-              <line x1="3" y1="18" x2="21" y2="18" />
-            </svg>
-          </button>
+              <svg
+                width="22"
+                height="22"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+              >
+                <line x1="5" y1="5" x2="19" y2="19" />
+                <line x1="19" y1="5" x2="5" y2="19" />
+              </svg>
+            </button>
+          ) : (
+            <button
+              onClick={onMenuClick}
+              aria-label="Menu"
+              className="text-black"
+            >
+              <svg
+                width="22"
+                height="22"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+              >
+                <line x1="3" y1="6" x2="21" y2="6" />
+                <line x1="3" y1="12" x2="21" y2="12" />
+                <line x1="3" y1="18" x2="21" y2="18" />
+              </svg>
+            </button>
+          )}
 
           {/* Cart */}
 
@@ -602,13 +651,13 @@ export default function Header({
 
       {/* ==================================================
           SEARCH PANEL
-          SEARCH-ə basanda açılır. Mega menu ilə eyni en və
-          mövqedə (sağda 75%).
+          Desktop: sağda 75% (mega menu ilə eyni yerdə)
+          Mobil: header-in altında tam ekran
       ================================================== */}
 
       {searchOpen && (
         <>
-          {/* Overlay: üzərinə klik edəndə axtarış bağlanır.
+          {/* Overlay (yalnız desktop): üzərinə klik edəndə axtarış bağlanır.
               Qaralma istəmirsinizsə bg-black/30 -> bg-transparent */}
 
           <div
@@ -626,41 +675,80 @@ export default function Header({
 
           <div
             className="
-              absolute
-              top-full
-              right-0
-              w-3/4
-              hidden
-              md:block
-              pt-1
+              fixed
+              inset-x-0
+              top-10
+              bottom-0
+              md:absolute
+              md:left-auto
+              md:right-0
+              md:top-full
+              md:bottom-auto
+              md:w-3/4
+              md:pt-1
             "
             role="search"
           >
-            <div className="bg-white px-2.5 pb-6 max-h-[85vh] overflow-y-auto">
-              {/* INPUT */}
+            <div
+              className="
+                h-full
+                md:h-auto
+                md:max-h-[85vh]
+                overflow-y-auto
+                bg-white
+                px-6
+                pb-10
+                md:px-2.5
+                md:pb-6
+              "
+            >
+              {/* INPUT (mobildə sağda X düyməsi ilə) */}
 
-              <input
-                ref={inputRef}
-                type="text"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="SEARCH"
-                aria-label="Search products"
-                autoComplete="off"
-                className="
-                  w-full
-                  bg-transparent
-                  border-b
-                  border-neutral-300
-                  pt-4
-                  pb-3
-                  text-[14px]
-                  uppercase
-                  text-black
-                  placeholder:text-[#6b6b6b]
-                  outline-none
-                "
-              />
+              <div className="flex items-end gap-4 pt-2 md:pt-0">
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="SEARCH"
+                  aria-label="Search products"
+                  autoComplete="off"
+                  className="
+                    min-w-0
+                    flex-1
+                    bg-transparent
+                    border-b
+                    border-neutral-300
+                    pt-4
+                    pb-3
+                    text-[16px]
+                    md:text-[14px]
+                    uppercase
+                    text-black
+                    placeholder:text-[#6b6b6b]
+                    outline-none
+                  "
+                />
+
+                <button
+                  type="button"
+                  onClick={closeSearch}
+                  aria-label="Close search"
+                  className="md:hidden pb-2 text-black"
+                >
+                  <svg
+                    width="22"
+                    height="22"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                  >
+                    <line x1="5" y1="5" x2="19" y2="19" />
+                    <line x1="19" y1="5" x2="5" y2="19" />
+                  </svg>
+                </button>
+              </div>
 
               <div aria-live="polite">
                 {/* CATEGORY SUGGESTIONS */}
@@ -691,39 +779,44 @@ export default function Header({
                 {/* PRODUCTS */}
 
                 {results.length > 0 && (
-                  <ul className="grid grid-cols-3 gap-x-[13px] gap-y-8 pt-5">
-                    {results.map((p) => {
-                      const img = getProductImage(p);
+                  <>
+                    <ul className="grid grid-cols-3 gap-x-3 gap-y-6 pt-5 md:gap-x-[13px] md:gap-y-8">
+                      {results.map((p) => {
+                        const img = getProductImage(p);
 
-                      return (
-                        <li key={p._id}>
-                          <Link
-                            href={productHref(p._id)}
-                            onClick={closeSearch}
-                            className="block text-center"
-                          >
-                            <div className="aspect-[9/10] w-full overflow-hidden bg-[#e8e8e8]">
-                              {img && (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img
-                                  src={img}
-                                  alt={p.name}
-                                  className="h-full w-full object-cover"
-                                />
-                              )}
-                            </div>
+                        return (
+                          <li key={p._id}>
+                            <Link
+                              href={productHref(p._id)}
+                              onClick={closeSearch}
+                              className="block text-center"
+                            >
+                              <div className="aspect-[9/10] w-full overflow-hidden bg-[#e8e8e8]">
+                                {img && (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img
+                                    src={img}
+                                    alt={p.name}
+                                    className="h-full w-full object-cover"
+                                  />
+                                )}
+                              </div>
 
-                            <p className="mt-2 text-[13px] font-medium leading-tight text-black">
-                              {p.name}
-                            </p>
-                            <p className="text-[13px] text-black">
-                              {formatPrice(p.price)}
-                            </p>
-                          </Link>
-                        </li>
-                      );
-                    })}
-                  </ul>
+                              <p className="mt-2 text-[13px] font-medium leading-tight text-black">
+                                {p.name}
+                              </p>
+                              <p className="text-[13px] text-black">
+                                {formatPrice(p.price)}
+                              </p>
+                            </Link>
+                          </li>
+                        );
+                      })}
+                    </ul>
+
+                    {/* Mobildə nəticələrin sonunda xətt */}
+                    <div className="mt-6 border-t border-neutral-300 md:hidden" />
+                  </>
                 )}
 
                 {/* STATUS */}
