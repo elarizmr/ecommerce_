@@ -3,23 +3,23 @@ import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
 import dotenv from "dotenv";
 
-// .env.local faylını oxuyur
 dotenv.config({ path: ".env.local" });
 
 const MONGODB_URI = process.env.MONGODB_URI;
+const ADMIN_NAME = process.env.ADMIN_NAME || "Admin";
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
 
 if (!MONGODB_URI) {
   console.error("XƏTA: .env.local faylında MONGODB_URI tapılmadı.");
   process.exit(1);
 }
 
-// --- Admin məlumatları (istədiyiniz kimi dəyişin) ---
-const ADMIN_NAME = "Admin";
-const ADMIN_EMAIL = "admin@example.com";
-const ADMIN_PASSWORD = "GucluSifre123!";
-// -----------------------------------------------------
+if (!ADMIN_EMAIL || !ADMIN_PASSWORD) {
+  console.error("XƏTA: ADMIN_EMAIL və ADMIN_PASSWORD verilməlidir.");
+  process.exit(1);
+}
 
-// User schema-nı sizin app/lib/models/User.ts ilə eyni şəkildə təyin edirik
 const userSchema = new mongoose.Schema(
   {
     name: { type: String, required: true },
@@ -52,11 +52,7 @@ async function main() {
       role: "admin",
     });
 
-    console.log("Admin uğurla yaradıldı:");
-    console.log("Ad:", ADMIN_NAME);
-    console.log("Email:", ADMIN_EMAIL);
-    console.log("Şifrə:", ADMIN_PASSWORD);
-    console.log("ID:", admin._id.toString());
+    console.log("Admin uğurla yaradıldı:", ADMIN_EMAIL, "| ID:", admin._id.toString());
   } catch (err) {
     console.error("Xəta baş verdi:", err.message);
   } finally {
