@@ -45,7 +45,7 @@ const FEATURED_STORIES: FeaturedStory[] = [
     name: "TOM CHUNG",
     description:
       "Tom Chung is an independent industrial designer whose career has spanned oceans, mediums, and modes of making. From early experiments in reclaimed wood to a sharply refined design language shaped by European industry, Chung's work merges industrial precision with personal...",
-    href: "https://www.olafhussein.com/blogs/citizens/tom-chung",
+    href: "#",
     image: "/images/tom.jpg",
   },
   {

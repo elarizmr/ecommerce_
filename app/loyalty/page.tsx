@@ -1,5 +1,5 @@
 import BecomeMember from "./BecomeMember";
-import EarnMorePoints from "./EarnMorePoints";
+
 import LoyaltyGallery from "./LoyaltyGallery";
 import LoyaltyHero from "./LoyaltyHero";
 import LoyaltyTiers from "./LoyaltyTiers";
@@ -13,7 +13,7 @@ export default function Loyalty() {
       <LoyaltyTiers />
       <LoyaltyGallery />
       <RedeemPoints />
-      <EarnMorePoints />
+     
     </div>
   );
 }
