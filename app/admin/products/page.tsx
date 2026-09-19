@@ -31,6 +31,7 @@ const emptyForm = {
   materialInfo: "",
   shippingReturns: "",
   points: "",
+  lastChance: false,
 };
 
 export default function ProductsPage() {
@@ -122,6 +123,7 @@ export default function ProductsPage() {
       materialInfo: p.materialInfo || "",
       shippingReturns: p.shippingReturns || "",
       points: String(p.points ?? ""),
+      lastChance: !!p.lastChance,
     });
   }
 
@@ -346,6 +348,17 @@ export default function ProductsPage() {
           />
         </div>
 
+        {/* Last Chance */}
+        <label className="flex items-center gap-2 text-sm cursor-pointer">
+          <input
+            type="checkbox"
+            checked={form.lastChance}
+            onChange={(e) => setForm({ ...form, lastChance: e.target.checked })}
+            className="w-4 h-4"
+          />
+          Last Chance bölməsində göstər
+        </label>
+
         {/* Qısa Açıqlama */}
         <div>
           <label className="text-xs text-neutral-500 block mb-1">Qısa açıqlama</label>
@@ -525,6 +538,7 @@ export default function ProductsPage() {
               <th className="text-left p-3">Bonus Xal</th>
               <th className="text-left p-3">Ölçülər</th>
               <th className="text-left p-3">Rənglər</th>
+              <th className="text-left p-3">Last Chance</th>
               <th className="text-left p-3">Əməliyyat</th>
             </tr>
           </thead>
@@ -540,6 +554,7 @@ export default function ProductsPage() {
                 <td className="p-3">{p.points ?? 0} xal</td>
                 <td className="p-3">{p.sizes?.join(", ")}</td>
                 <td className="p-3">{p.colors?.map((c) => c.name).join(", ")}</td>
+                <td className="p-3">{p.lastChance ? "Bəli" : "—"}</td>
                 <td className="p-3 space-x-2">
                   <button
                     onClick={() => handleEdit(p)}

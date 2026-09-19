@@ -63,7 +63,7 @@ export default function StickyGallerySection() {
           </p>
 
           <a
-            href="/collections/fall-winter-26"
+            href="#"
             className="mt-8 inline-block border border-neutral-900 px-8 py-4 text-sm font-semibold tracking-wide transition-colors hover:bg-neutral-900 hover:text-white"
           >
             SHOP COLLECTION

@@ -6,6 +6,12 @@ import Link from 'next/link';
 
 const SCROLL_RANGE = 600;
 
+// Header ölçüləri (Header.tsx ilə uyğun olmalıdır)
+// Desktop: pt-[2px] + h-[26px] -> nav zolağının mərkəzi y = 15px
+// Mobil:   h-10 -> mərkəz y = 20px
+const DESKTOP_BAR_CENTER = 15;
+const DESKTOP_LEFT = 10; // nav-ın px-2.5 ilə eyni xətt
+
 export default function MorphingLogo() {
   const [progress, setProgress] = useState(0);
   const [windowSize, setWindowSize] = useState({ width: 1200, height: 800 });
@@ -40,8 +46,11 @@ export default function MorphingLogo() {
   const startTop = windowSize.height - (isMobile ? 30 : 40) - startFontSize * 0.85;
 
   const endFontSize = isMobile ? 15 : 16;
-  const endTop = isMobile ? 15 : 16;
-  const left = isMobile ? 16 : 24;
+
+  // Desktop: leading-none olduğu üçün loqonun qutusu font ölçüsü qədərdir,
+  // yəni top = zolağın mərkəzi - fontSize / 2 (15 - 8 = 7px)
+  const endTop = isMobile ? 15 : DESKTOP_BAR_CENTER - endFontSize / 2;
+  const left = isMobile ? 16 : DESKTOP_LEFT;
 
   const fontSize = startFontSize + (endFontSize - startFontSize) * progress;
   const top = startTop + (endTop - startTop) * progress;

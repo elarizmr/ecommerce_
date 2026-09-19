@@ -1,12 +1,20 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 import { CATEGORIES, Section, slugify } from '@/app/lib/categories';
 
 const SCROLL_RANGE = 600;
+
+// Axtarış ayarları
+const SEARCH_MIN_LENGTH = 2; // ən azı neçə hərfdən sonra axtarılsın
+const SEARCH_DEBOUNCE_MS = 300; // yazmağı dayandırandan sonra gözləmə
+const SEARCH_LIMIT = 12; // panelde maksimum neçə məhsul göstərilsin
+
+// Məhsul səhifəsinin ünvanı. Layihənizdəki real route-a uyğun dəyişin.
+const productHref = (id: string) => `/products/${id}`;
 
 // Mega menu məntiqi dəyişmir:
 // MEN -> yalnız men
@@ -20,6 +28,35 @@ const MEGA_MENU_MAP: Record<string, Section[]> = {
   'LAST CHANCE': ['men', 'women', 'accessories'],
 };
 
+// Axtarışda kateqoriya təklifinin altındakı yazı: "All Jackets", "Womens Jackets"
+const SECTION_PREFIX: Record<Section, string> = {
+  men: 'All',
+  women: 'Womens',
+  accessories: 'Accessories',
+};
+
+type SearchProduct = {
+  _id: string;
+  name: string;
+  price: number;
+  section: string;
+  subcategory: string;
+  image?: string[] | string;
+  colors?: { name: string; images: string[] }[];
+};
+
+const formatPrice = (price: number) => `m.${Number(price).toFixed(2)}`;
+
+const getProductImage = (p: SearchProduct): string | null => {
+  if (Array.isArray(p.image) && p.image[0]) return p.image[0];
+  if (typeof p.image === 'string' && p.image) return p.image;
+  return p.colors?.find((c) => c.images?.[0])?.images[0] ?? null;
+};
+
+// "jackets" -> "jacket" (tək/cəm fərqi olmasın)
+const singular = (t: string) =>
+  t.length > 3 && t.endsWith('s') ? t.slice(0, -1) : t;
+
 export default function Header({
   onMenuClick,
   isHome = false,
@@ -32,6 +69,15 @@ export default function Header({
   const [activeSections, setActiveSections] = useState<Section[] | null>(
     null
   );
+  // Hansı nav linkinin üzərindəyik (altından xətt çəkmək üçün)
+  const [activeLink, setActiveLink] = useState<string | null>(null);
+
+  // Axtarış
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<SearchProduct[]>([]);
+  const [searching, setSearching] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const pathname = usePathname();
 
@@ -75,8 +121,107 @@ export default function Header({
     };
   }, [isHome]);
 
-  // Mega menu açıqdırsa header ağ olur
-  const solid = !isHome || scrolled || activeSections !== null;
+  // --------------------------------------------------
+  // SEARCH
+  // --------------------------------------------------
+
+  const closeSearch = useCallback(() => {
+    setSearchOpen(false);
+    setQuery('');
+    setResults([]);
+    setSearching(false);
+  }, []);
+
+  // Səhifə dəyişəndə axtarış bağlansın
+  useEffect(() => {
+    closeSearch();
+  }, [pathname, closeSearch]);
+
+  // Esc ilə bağlanma
+  useEffect(() => {
+    if (!searchOpen) return;
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeSearch();
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [searchOpen, closeSearch]);
+
+  // Panel açılanda input-a fokus
+  useEffect(() => {
+    if (searchOpen) inputRef.current?.focus();
+  }, [searchOpen]);
+
+  // Yazdıqca (debounce ilə) məhsulları gətir
+  useEffect(() => {
+    const q = query.trim();
+
+    if (!searchOpen || q.length < SEARCH_MIN_LENGTH) {
+      setResults([]);
+      setSearching(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    setSearching(true);
+
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `/api/products?search=${encodeURIComponent(q)}&limit=${SEARCH_LIMIT}`,
+          { signal: controller.signal }
+        );
+        if (!res.ok) throw new Error('Search failed');
+
+        const data = await res.json();
+        setResults(Array.isArray(data) ? data : []);
+        setSearching(false);
+      } catch (err: any) {
+        if (err?.name === 'AbortError') return;
+        setResults([]);
+        setSearching(false);
+      }
+    }, SEARCH_DEBOUNCE_MS);
+
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [query, searchOpen]);
+
+  // Uyğun kateqoriyalar: "jackets" -> Men Jackets + Women Jackets
+  const suggestions = useMemo(() => {
+    const q = singular(query.trim().toLowerCase());
+    if (q.length < SEARCH_MIN_LENGTH) return [];
+
+    const found: { section: Section; subcategory: string }[] = [];
+
+    for (const section of Object.keys(CATEGORIES) as Section[]) {
+      for (const subcategory of CATEGORIES[section]) {
+        if (subcategory.toLowerCase().includes(q)) {
+          found.push({ section, subcategory });
+        }
+      }
+    }
+
+    return found;
+  }, [query]);
+
+  const hasQuery = query.trim().length >= SEARCH_MIN_LENGTH;
+  const noResults =
+    hasQuery && !searching && results.length === 0 && suggestions.length === 0;
+
+  // --------------------------------------------------
+  // MENU STATE
+  // --------------------------------------------------
+
+  const megaOpen = activeSections !== null;
+
+  // Mega menu və ya axtarış açıqdırsa nav ağ olur
+  const open = megaOpen || searchOpen;
+  const solid = !isHome || scrolled || open;
 
   const navLinks = [
     'MEN',
@@ -87,6 +232,20 @@ export default function Header({
     'LOYALTY',
   ];
 
+  const closeMenu = () => {
+    setActiveSections(null);
+    setActiveLink(null);
+  };
+
+  const toggleSearch = () => {
+    closeMenu();
+    if (searchOpen) {
+      closeSearch();
+    } else {
+      setSearchOpen(true);
+    }
+  };
+
   // --------------------------------------------------
   // SECTION TITLE
   // --------------------------------------------------
@@ -96,6 +255,22 @@ export default function Header({
     if (section === 'women') return 'Women';
     return 'Accessories';
   };
+
+  // --------------------------------------------------
+  // NAV ITEM STYLE
+  // Aktiv (hover) olan linkin altından nazik xətt çəkilir
+  // --------------------------------------------------
+
+  const itemClass = (active: boolean) => `
+    text-[13px]
+    font-semibold
+    tracking-wide
+    whitespace-nowrap
+    transition-colors
+    duration-200
+    ${solid ? 'text-black' : 'text-white'}
+    ${active ? 'underline decoration-1 underline-offset-[3px]' : ''}
+  `;
 
   // --------------------------------------------------
   // RENDER
@@ -109,22 +284,39 @@ export default function Header({
         left-0
         w-full
         z-50
+        md:pt-[2px]
         transition-colors
         duration-300
-        ${solid ? 'bg-white' : 'bg-white md:bg-transparent'}
+        ${solid && !open ? 'bg-white' : 'bg-white md:bg-transparent'}
       `}
-      onMouseLeave={() => setActiveSections(null)}
+      onMouseLeave={closeMenu}
     >
       {/* ==================================================
-          TOP HEADER
+          TOP ROW
+          Desktop: solda 25% (logo), sağda 75% (nav)
       ================================================== */}
 
-      <div className="relative flex items-center justify-between h-10 px-6">
+      <div
+        className="
+          relative
+          flex
+          items-center
+          justify-between
+          md:justify-start
+          h-10
+          md:h-[26px]
+          px-6
+          md:px-0
+        "
+      >
         {/* --------------------------------------------------
             LOGO
         -------------------------------------------------- */}
 
-        <div className="flex items-center min-w-[120px]">
+        <div
+          className="flex items-center min-w-[120px] md:w-1/4 md:px-2.5"
+          onMouseEnter={closeMenu}
+        >
           {!isHome && (
             <Link
               href="/"
@@ -145,9 +337,24 @@ export default function Header({
 
         {/* ==================================================
             DESKTOP NAVIGATION
+            Sağda 75% enində, elementlər bərabər yayılır
+            (space-between), açılanda ağ qutu olur.
         ================================================== */}
 
-        <nav className="hidden md:flex items-center gap-7">
+        <nav
+          className={`
+            hidden
+            md:flex
+            md:w-3/4
+            h-full
+            items-center
+            justify-between
+            px-2.5
+            transition-colors
+            duration-200
+            ${open ? 'bg-white' : ''}
+          `}
+        >
           {navLinks.map((link) => {
             const hasMegaMenu = MEGA_MENU_MAP[link] !== undefined;
 
@@ -156,108 +363,61 @@ export default function Header({
                 key={link}
                 href={`/${link.toLowerCase().replace(/\s+/g, '-')}`}
                 onMouseEnter={() => {
+                  // Axtarış açıqkən mega menu hover ilə açılmasın
+                  if (searchOpen) return;
+
                   if (hasMegaMenu) {
                     setActiveSections(MEGA_MENU_MAP[link]);
+                    setActiveLink(link);
                   } else {
-                    setActiveSections(null);
+                    closeMenu();
                   }
                 }}
-                className={`
-                  text-[13px]
-                  font-semibold
-                  tracking-wide
-                  whitespace-nowrap
-                  transition-colors
-                  duration-200
-                  ${solid ? 'text-black' : 'text-white'}
-                  ${
-                    link === 'LAST CHANCE'
-                      ? 'underline underline-offset-4'
-                      : ''
-                  }
-                `}
+                className={itemClass(activeLink === link)}
               >
                 {link}
               </Link>
             );
           })}
 
-          {/* --------------------------------------------------
-              SEARCH
-          -------------------------------------------------- */}
+          {/* SEARCH: link deyil, paneli açıb-bağlayan düymədir */}
 
-          <Link
-            href="/search"
-            onMouseEnter={() => setActiveSections(null)}
-            className={`
-              text-[13px]
-              font-semibold
-              tracking-wide
-              whitespace-nowrap
-              transition-colors
-              duration-200
-              ${solid ? 'text-black' : 'text-white'}
-            `}
+          <button
+            type="button"
+            onMouseEnter={closeMenu}
+            onClick={toggleSearch}
+            aria-expanded={searchOpen}
+            className={itemClass(searchOpen)}
           >
             SEARCH
-          </Link>
+          </button>
 
-          {/* --------------------------------------------------
-              ACCOUNT
-          -------------------------------------------------- */}
+          {/* ACCOUNT */}
 
           <Link
             href={userData ? '/account' : '/login'}
-            onMouseEnter={() => setActiveSections(null)}
-            className={`
-              text-[13px]
-              font-semibold
-              tracking-wide
-              whitespace-nowrap
-              transition-colors
-              duration-200
-              ${solid ? 'text-black' : 'text-white'}
-            `}
+            onMouseEnter={closeMenu}
+            className={`${itemClass(false)} max-w-[140px] truncate`}
           >
             {userData ? userData.email : 'ACCOUNT'}
           </Link>
 
-          {/* --------------------------------------------------
-              WISHLIST
-          -------------------------------------------------- */}
+          {/* WISHLIST */}
 
           <Link
             href="/wishlist"
-            onMouseEnter={() => setActiveSections(null)}
-            className={`
-              text-[13px]
-              font-semibold
-              tracking-wide
-              whitespace-nowrap
-              transition-colors
-              duration-200
-              ${solid ? 'text-black' : 'text-white'}
-            `}
+            onMouseEnter={closeMenu}
+            className={itemClass(false)}
           >
             WISHLIST [0]
           </Link>
 
-          {/* --------------------------------------------------
-              CART
-          -------------------------------------------------- */}
+          {/* CART */}
 
           <Link
             href="/cart"
-            onMouseEnter={() => setActiveSections(null)}
-            className={`
-              text-[13px]
-              font-semibold
-              tracking-wide
-              whitespace-nowrap
-              transition-colors
-              duration-200
-              ${solid ? 'text-black' : 'text-white'}
-            `}
+            onMouseEnter={closeMenu}
+            className={itemClass(false)}
           >
             CART [0]
           </Link>
@@ -320,30 +480,28 @@ export default function Header({
         <>
           {/* --------------------------------------------------
               DARK OVERLAY
-
-              Mega menu açıldıqda səhifənin sol tərəfi
-              şəkildəki kimi qaralır.
+              Bütün səhifə (nav-ın arxası və solda qalan 25%)
+              yüngülcə qaralır. Üzərinə keçəndə menyu bağlanır.
           -------------------------------------------------- */}
 
           <div
             className="
               fixed
-              left-0
-              right-0
-              top-14
-              bottom-0
-              bg-black/30
+              inset-0
               hidden
               md:block
+              bg-black/30
               -z-10
             "
+            onMouseEnter={closeMenu}
             aria-hidden="true"
           />
 
           {/* --------------------------------------------------
-              MEGA MENU CONTAINER
-
-              Sağ tərəfdə ekranın 75%-i.
+              MEGA MENU WRAPPER
+              Nav ilə panel arasındakı 4px boşluq (pt-1) bu
+              wrapper-in içindədir, ona görə siçan keçəndə
+              menyu bağlanmır.
           -------------------------------------------------- */}
 
           <div
@@ -351,108 +509,238 @@ export default function Header({
               absolute
               top-full
               right-0
-              w-[75%]
+              w-3/4
               hidden
               md:block
-              bg-white
-              border-t
-              border-gray-200
-              shadow-sm
+              pt-1
             "
-            onMouseEnter={() => {
-              // Mega menu üzərinə keçəndə açıq qalır
-            }}
           >
-            {/* --------------------------------------------------
-                MENU CONTENT
-            -------------------------------------------------- */}
+            {/* Ağ panel: kölgəsiz, künc yuvarlaqlığı yoxdur */}
 
-            <div
-              className="
-                grid
-                grid-cols-3
-                gap-0
-                px-4
-                pt-4
-                pb-6
-              "
-            >
-              {activeSections.map((section) => (
-                <div
-                  key={section}
-                  className="
-                    min-w-0
-                    px-0
-                  "
-                >
-                  {/* --------------------------------------------------
-                      SECTION TITLE
-                  -------------------------------------------------- */}
+            <div className="bg-white px-2.5 pt-1.5 pb-[11px]">
+              {/* --------------------------------------------------
+                  COLUMNS
+                  5 bərabər sütun, hər sütun bir bölmədir
+              -------------------------------------------------- */}
 
-                  <h3
-                    className="
-                      text-[15px]
-                      leading-5
-                      font-bold
-                      text-black
-                      mb-3
-                    "
-                  >
-                    {getSectionTitle(section)}
-                  </h3>
+              <div className="grid grid-cols-5">
+                {activeSections.map((section) => (
+                  <div key={section} className="min-w-0">
+                    {/* SECTION TITLE */}
 
-                  {/* --------------------------------------------------
-                      CATEGORY LIST
-                  -------------------------------------------------- */}
+                    <h3
+                      className="
+                        text-[14px]
+                        leading-[18.5px]
+                        font-medium
+                        text-black
+                        mb-1
+                      "
+                    >
+                      {getSectionTitle(section)}
+                    </h3>
 
-                  <ul className="space-y-[7px]">
-                    {/* View all */}
+                    {/* CATEGORY LIST */}
 
-                    <li>
-                      <Link
-                        href={`/${section}`}
-                        className="
-                          text-[14px]
-                          leading-5
-                          text-gray-700
-                          hover:text-black
-                          transition-colors
-                          duration-150
-                        "
-                      >
-                        View all
-                      </Link>
-                    </li>
+                    <ul>
+                      {/* View all */}
 
-                    {/* Subcategories */}
-
-                    {CATEGORIES[section].map((subcategory) => (
-                      <li key={subcategory}>
+                      <li>
                         <Link
-                          href={`/${section}/${slugify(subcategory)}`}
+                          href={`/${section}`}
                           className="
+                            block
+                            pl-0.5
                             text-[14px]
-                            leading-5
-                            text-gray-700
+                            leading-[18.5px]
+                            text-[#6b6b6b]
                             hover:text-black
                             transition-colors
                             duration-150
                           "
                         >
-                          {subcategory}
+                          View all
                         </Link>
                       </li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
+
+                      {/* Subcategories */}
+
+                      {CATEGORIES[section].map((subcategory) => (
+                        <li key={subcategory}>
+                          <Link
+                            href={`/${section}/${slugify(subcategory)}`}
+                            className="
+                              block
+                              pl-0.5
+                              text-[14px]
+                              leading-[18.5px]
+                              text-[#6b6b6b]
+                              hover:text-black
+                              transition-colors
+                              duration-150
+                            "
+                          >
+                            {subcategory}
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+
+              {/* --------------------------------------------------
+                  BOTTOM DIVIDER
+                  Panelin içində, hər iki tərəfdən 10px içəridə
+              -------------------------------------------------- */}
+
+              <div className="mt-3 border-t border-neutral-300" />
             </div>
+          </div>
+        </>
+      )}
 
-            {/* --------------------------------------------------
-                BOTTOM BORDER
-            -------------------------------------------------- */}
+      {/* ==================================================
+          SEARCH PANEL
+          SEARCH-ə basanda açılır. Mega menu ilə eyni en və
+          mövqedə (sağda 75%).
+      ================================================== */}
 
-            <div className="border-t border-gray-200" />
+      {searchOpen && (
+        <>
+          {/* Overlay: üzərinə klik edəndə axtarış bağlanır.
+              Qaralma istəmirsinizsə bg-black/30 -> bg-transparent */}
+
+          <div
+            className="
+              fixed
+              inset-0
+              hidden
+              md:block
+              bg-black/30
+              -z-10
+            "
+            onClick={closeSearch}
+            aria-hidden="true"
+          />
+
+          <div
+            className="
+              absolute
+              top-full
+              right-0
+              w-3/4
+              hidden
+              md:block
+              pt-1
+            "
+            role="search"
+          >
+            <div className="bg-white px-2.5 pb-6 max-h-[85vh] overflow-y-auto">
+              {/* INPUT */}
+
+              <input
+                ref={inputRef}
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="SEARCH"
+                aria-label="Search products"
+                autoComplete="off"
+                className="
+                  w-full
+                  bg-transparent
+                  border-b
+                  border-neutral-300
+                  pt-4
+                  pb-3
+                  text-[14px]
+                  uppercase
+                  text-black
+                  placeholder:text-[#6b6b6b]
+                  outline-none
+                "
+              />
+
+              <div aria-live="polite">
+                {/* CATEGORY SUGGESTIONS */}
+
+                {suggestions.length > 0 && (
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-4 border-b border-neutral-300 py-4">
+                    {suggestions.map(({ section, subcategory }) => (
+                      <Link
+                        key={`${section}-${subcategory}`}
+                        href={`/${section}/${slugify(subcategory)}`}
+                        onClick={closeSearch}
+                        className="block text-[14px] leading-[18.5px]"
+                      >
+                        <span className="block font-medium uppercase text-black">
+                          {subcategory}
+                        </span>
+                        <span className="block text-[#6b6b6b]">
+                          {SECTION_PREFIX[section]}{' '}
+                          <span className="font-medium text-black">
+                            {subcategory}
+                          </span>
+                        </span>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+
+                {/* PRODUCTS */}
+
+                {results.length > 0 && (
+                  <ul className="grid grid-cols-3 gap-x-[13px] gap-y-8 pt-5">
+                    {results.map((p) => {
+                      const img = getProductImage(p);
+
+                      return (
+                        <li key={p._id}>
+                          <Link
+                            href={productHref(p._id)}
+                            onClick={closeSearch}
+                            className="block text-center"
+                          >
+                            <div className="aspect-[9/10] w-full overflow-hidden bg-[#e8e8e8]">
+                              {img && (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                  src={img}
+                                  alt={p.name}
+                                  className="h-full w-full object-cover"
+                                />
+                              )}
+                            </div>
+
+                            <p className="mt-2 text-[13px] font-medium leading-tight text-black">
+                              {p.name}
+                            </p>
+                            <p className="text-[13px] text-black">
+                              {formatPrice(p.price)}
+                            </p>
+                          </Link>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+
+                {/* STATUS */}
+
+                {searching && results.length === 0 && (
+                  <p className="pt-4 text-[13px] text-[#6b6b6b]">
+                    Axtarılır...
+                  </p>
+                )}
+
+                {noResults && (
+                  <p className="pt-4 text-[13px] text-[#6b6b6b]">
+                    Nəticə tapılmadı
+                  </p>
+                )}
+              </div>
+            </div>
           </div>
         </>
       )}

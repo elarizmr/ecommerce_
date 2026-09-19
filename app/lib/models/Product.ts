@@ -27,8 +27,10 @@ const ProductSchema = new Schema(
     shippingReturns: String, // "Shipping & Returns"
 
     points: { type: Number, default: 0 }, // "Earn X points"
+    lastChance: { type: Boolean, default: false }, // Last Chance bölməsi üçün
   },
   { timestamps: true }
 );
+
 
 export default models.Product || model("Product", ProductSchema);

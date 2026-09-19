@@ -1,25 +1,28 @@
 // components/CollectionShowcase.tsx
 import Link from 'next/link';
 
-export default function CollectionShowcase() {
-  const categories = [
-    {
-      name: 'Menswear',
-      href: '/collections/all-mens',
-      image: '/images/men.jpg',
-    },
-    {
-      name: 'Womenswear',
-      href: '/collections/all-womens',
-      image: '/images/women.jpg',
-    },
-    {
-      name: 'Accessories',
-      href: '/collections/accessories',
-      image: '/images/gay.jpg',
-    },
-  ];
+import { Section } from '@/app/lib/categories';
 
+// Hər kartın linki header-dəki "View all" ilə eynidir: /men, /women, /accessories
+const categories: { name: string; section: Section; image: string }[] = [
+  {
+    name: 'Menswear',
+    section: 'men',
+    image: '/images/men.jpg',
+  },
+  {
+    name: 'Womenswear',
+    section: 'women',
+    image: '/images/women.jpg',
+  },
+  {
+    name: 'Accessories',
+    section: 'accessories',
+    image: '/images/gay.jpg',
+  },
+];
+
+export default function CollectionShowcase() {
   return (
     <section className="w-full bg-white">
       {/* Mətn hissəsi */}
@@ -35,32 +38,32 @@ export default function CollectionShowcase() {
         </p>
       </div>
 
-     {/* Kateqoriya kartları */}
-<div className="grid grid-cols-1 sm:grid-cols-3">
-  {categories.map((cat) => (
-    <Link
-      key={cat.name}
-      href={cat.href}
-      className="relative group aspect-[3/4] sm:aspect-[2/3] overflow-hidden"
-    >
-      <img
-        src={cat.image}
-        alt={cat.name}
-        className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-      />
-      <div className="absolute inset-0 bg-black/10" />
+      {/* Kateqoriya kartları */}
+      <div className="grid grid-cols-1 sm:grid-cols-3">
+        {categories.map((cat) => (
+          <Link
+            key={cat.name}
+            href={`/${cat.section}`}
+            className="relative group aspect-[3/4] sm:aspect-[2/3] overflow-hidden"
+          >
+            <img
+              src={cat.image}
+              alt={cat.name}
+              className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+            />
+            <div className="absolute inset-0 bg-black/10" />
 
-      <div className="absolute bottom-0 left-0 right-0 flex items-center justify-between px-5 py-5 text-white">
-        <span className="text-base sm:text-lg font-medium">
-          {cat.name}
-        </span>
-        <span className="text-xl transition-transform duration-300 group-hover:translate-x-1">
-          →
-        </span>
+            <div className="absolute bottom-0 left-0 right-0 flex items-center justify-between px-5 py-5 text-white">
+              <span className="text-base sm:text-lg font-medium">
+                {cat.name}
+              </span>
+              <span className="text-xl transition-transform duration-300 group-hover:translate-x-1">
+                →
+              </span>
+            </div>
+          </Link>
+        ))}
       </div>
-    </Link>
-  ))}
-</div>
     </section>
   );
 }

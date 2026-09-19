@@ -35,12 +35,12 @@ export default function LookSlider() {
 
       {/* Discover Collection düyməsi */}
       <div className="flex justify-center mt-10">
-        <Link
-          href="/collections/new-arrivals"
-          className="border border-black px-8 py-3 text-xs font-medium tracking-widest hover:bg-black hover:text-white transition-colors"
-        >
-          DISCOVER COLLECTION
-        </Link>
+       <Link
+  href="/collections/all"
+  className="border border-black px-8 py-3 text-xs font-medium tracking-widest hover:bg-black hover:text-white transition-colors"
+>
+  DISCOVER COLLECTION
+</Link>
       </div>
     </section>
   );

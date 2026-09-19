@@ -8,6 +8,7 @@ const ALLOWED_FIELDS = [
   "name", "price", "section", "subcategory", "description",
   "image", "stock", "sizes", "colors",
   "information", "modelInfo", "materialInfo", "shippingReturns", "points",
+  "lastChance",
 ];
 
 export async function PUT(
@@ -51,7 +52,7 @@ export async function PUT(
     }
 
     const updated = await Product.findByIdAndUpdate(id, update, {
-      new: true,
+      returnDocument: "after",
       runValidators: true,
     });
 
