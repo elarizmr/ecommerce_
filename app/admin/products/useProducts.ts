@@ -21,6 +21,7 @@ export type Product = {
   materialInfo?: string;
   shippingReturns?: string;
   points?: number;
+   lastChance?: boolean; // ← əlavə et
 };
 
 async function fetchProducts(): Promise<Product[]> {
