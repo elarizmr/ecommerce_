@@ -4,6 +4,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
+import WishlistButton from '@/app/components/WishlistButton';
+import { useCart } from '@/app/lib/useCart';
 
 interface ColorVariant {
   name: string;
@@ -213,6 +215,9 @@ export default function ProductPage() {
 
   const imageRefs = useRef<(HTMLDivElement | null)[]>([]);
 
+  // Səbətə əlavə et (giriş etməyibsə login səhifəsinə göndərir, uğurlu olsa paneli açır)
+  const { addToCart, isAdding } = useCart();
+
   const { data: product, isLoading, error } = useQuery<Product>({
     queryKey: ['product', id],
     queryFn: () => fetchProduct(id),
@@ -355,6 +360,10 @@ export default function ProductPage() {
           <div className="text-black md:max-w-md md:sticky md:top-24 md:self-start h-fit">
             <h1 className="text-lg font-bold uppercase tracking-tight">{product.name}</h1>
             <p className="text-sm font-medium mt-1">M.{Number(product.price).toFixed(2)}</p>
+
+            {/* Wishlist düyməsi */}
+            <WishlistButton productId={product._id} />
+
             {product.description && (
               <p className="text-xs text-gray-500 mt-2">{product.description}</p>
             )}
@@ -406,12 +415,22 @@ export default function ProductPage() {
             )}
 
             <button
-              disabled={!selectedSize || product.stock <= 0}
-              onClick={() => alert(`Cart: ${product.name} / ${selectedSize}`)}
+              disabled={!selectedSize || product.stock <= 0 || isAdding}
+              onClick={() => {
+                if (!selectedSize) return;
+                addToCart({
+                  productId: product._id,
+                  size: selectedSize,
+                  color: product.colors?.[selectedColor]?.name ?? '',
+                  quantity: 1,
+                });
+              }}
               className="mt-6 w-full bg-black text-white text-xs font-semibold tracking-wider py-4 disabled:opacity-40"
             >
               {product.stock <= 0
                 ? 'SOLD OUT'
+                : isAdding
+                ? 'ADDING...'
                 : selectedSize
                 ? 'ADD TO CART'
                 : 'SELECT A SIZE'}

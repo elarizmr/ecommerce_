@@ -5,6 +5,9 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 import { CATEGORIES, Section, slugify } from '@/app/lib/categories';
+import { useWishlist } from '@/app/lib/useWishlist';
+import { useCart } from '@/app/lib/useCart';
+import CartDrawer from '@/app/components/CartDrawer';
 
 const SCROLL_RANGE = 600;
 
@@ -79,7 +82,16 @@ export default function Header({
   const [searching, setSearching] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Səbət paneli
+  const [cartOpen, setCartOpen] = useState(false);
+
   const pathname = usePathname();
+
+  // Wishlist-dəki məhsul sayı (login olmayanda 0)
+  const { count: wishlistCount } = useWishlist();
+
+  // Səbətdəki ümumi miqdar + panelı açan funksiya (login yoxdursa /login-ə göndərir)
+  const { count: cartCount, openCart } = useCart();
 
   // --------------------------------------------------
   // USER
@@ -137,6 +149,27 @@ export default function Header({
     closeSearch();
   }, [pathname, closeSearch]);
 
+  const closeCart = useCallback(() => {
+    setCartOpen(false);
+  }, []);
+
+  // Səhifə dəyişəndə səbət paneli bağlansın
+  useEffect(() => {
+    closeCart();
+  }, [pathname, closeCart]);
+
+  // Esc ilə səbəti bağla
+  useEffect(() => {
+    if (!cartOpen) return;
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeCart();
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [cartOpen, closeCart]);
+
   // Esc ilə bağlanma
   useEffect(() => {
     if (!searchOpen) return;
@@ -160,6 +193,7 @@ export default function Header({
     const onOpenSearch = () => {
       setActiveSections(null);
       setActiveLink(null);
+      setCartOpen(false);
       setSearchOpen(true);
     };
 
@@ -167,9 +201,23 @@ export default function Header({
     return () => window.removeEventListener('open-search', onOpenSearch);
   }, []);
 
-  // Mobildə axtarış açıqkən arxadakı səhifə sürüşməsin
+  // Header-dəki CART, mobil menyudakı CART və məhsul səhifəsindəki ADD TO CART
+  // window.dispatchEvent(new Event('open-cart')) çağıranda səbət paneli açılır
   useEffect(() => {
-    if (!searchOpen) return;
+    const onOpenCart = () => {
+      setActiveSections(null);
+      setActiveLink(null);
+      closeSearch();
+      setCartOpen(true);
+    };
+
+    window.addEventListener('open-cart', onOpenCart);
+    return () => window.removeEventListener('open-cart', onOpenCart);
+  }, [closeSearch]);
+
+  // Mobildə axtarış və ya səbət açıqkən arxadakı səhifə sürüşməsin
+  useEffect(() => {
+    if (!searchOpen && !cartOpen) return;
     if (!window.matchMedia('(max-width: 767px)').matches) return;
 
     const prev = document.body.style.overflow;
@@ -178,7 +226,7 @@ export default function Header({
     return () => {
       document.body.style.overflow = prev;
     };
-  }, [searchOpen]);
+  }, [searchOpen, cartOpen]);
 
   // Yazdıqca (debounce ilə) məhsulları gətir
   useEffect(() => {
@@ -246,7 +294,7 @@ export default function Header({
   const megaOpen = activeSections !== null;
 
   // Mega menu və ya axtarış açıqdırsa nav ağ olur
-  const open = megaOpen || searchOpen;
+  const open = megaOpen || searchOpen || cartOpen;
   const solid = !isHome || scrolled || open;
 
   const navLinks = [
@@ -265,11 +313,23 @@ export default function Header({
 
   const toggleSearch = () => {
     closeMenu();
+    setCartOpen(false);
     if (searchOpen) {
       closeSearch();
     } else {
       setSearchOpen(true);
     }
+  };
+
+  // CART: açıqdırsa bağla, bağlıdırsa aç (giriş etməyibsə login səhifəsinə gedir)
+  const toggleCart = () => {
+    if (cartOpen) {
+      closeCart();
+      return;
+    }
+    closeMenu();
+    closeSearch();
+    openCart();
   };
 
   // --------------------------------------------------
@@ -390,8 +450,8 @@ export default function Header({
                 key={link}
                 href={`/${link.toLowerCase().replace(/\s+/g, '-')}`}
                 onMouseEnter={() => {
-                  // Axtarış açıqkən mega menu hover ilə açılmasın
-                  if (searchOpen) return;
+                  // Axtarış və ya səbət açıqkən mega menu hover ilə açılmasın
+                  if (searchOpen || cartOpen) return;
 
                   if (hasMegaMenu) {
                     setActiveSections(MEGA_MENU_MAP[link]);
@@ -436,18 +496,20 @@ export default function Header({
             onMouseEnter={closeMenu}
             className={itemClass(false)}
           >
-            WISHLIST [0]
+            WISHLIST [{wishlistCount}]
           </Link>
 
-          {/* CART */}
+          {/* CART: link deyil, səbət panelini açıb-bağlayan düymədir */}
 
-          <Link
-            href="/cart"
+          <button
+            type="button"
             onMouseEnter={closeMenu}
-            className={itemClass(false)}
+            onClick={toggleCart}
+            aria-expanded={cartOpen}
+            className={itemClass(cartOpen)}
           >
-            CART [0]
-          </Link>
+            CART [{cartCount}]
+          </button>
         </nav>
 
         {/* ==================================================
@@ -458,11 +520,14 @@ export default function Header({
           {/* Axtarış açıqdırsa hamburger əvəzinə bağlama (X) düyməsi.
               Axtarışı mobil menyudakı SEARCH bəndi açır. */}
 
-          {searchOpen ? (
+          {searchOpen || cartOpen ? (
             <button
               type="button"
-              onClick={closeSearch}
-              aria-label="Close search"
+              onClick={() => {
+                closeSearch();
+                closeCart();
+              }}
+              aria-label="Close panel"
               className="text-black"
             >
               <svg
@@ -500,8 +565,10 @@ export default function Header({
 
           {/* Cart */}
 
-          <Link
-            href="/cart"
+          <button
+            type="button"
+            onClick={toggleCart}
+            aria-label="Cart"
             className="flex items-center gap-1 text-black"
           >
             <svg
@@ -516,8 +583,8 @@ export default function Header({
               <path d="M9 8V6a3 3 0 016 0v2" />
             </svg>
 
-            <span className="text-xs">[0]</span>
-          </Link>
+            <span className="text-xs">[{cartCount}]</span>
+          </button>
         </div>
       </div>
 
@@ -837,6 +904,13 @@ export default function Header({
           </div>
         </>
       )}
+
+      {/* ==================================================
+          CART PANEL
+          Sağdan sürüşərək açılır (animasiya CartDrawer-dədir)
+      ================================================== */}
+
+      <CartDrawer open={cartOpen} onClose={closeCart} />
     </header>
   );
 }

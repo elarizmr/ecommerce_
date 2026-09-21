@@ -4,11 +4,14 @@
 import Link from 'next/link';
 import { X, ArrowRight, ShoppingBag } from 'lucide-react';
 
+import { useWishlist } from '@/app/lib/useWishlist';
+import { useCart } from '@/app/lib/useCart';
+
 type MenuItem = {
   name: string;
   href: string;
-  // 'search' olarsa səhifəyə keçmir, Header-dəki axtarış panelini açır
-  action?: 'search';
+  // 'search' / 'cart' olarsa səhifəyə keçmir, Header-dəki paneli açır
+  action?: 'search' | 'cart';
 };
 
 export default function MobileMenu({
@@ -18,6 +21,10 @@ export default function MobileMenu({
   open: boolean;
   onClose: () => void;
 }) {
+  // Wishlist və səbətdəki say (login olmayanda 0)
+  const { count: wishlistCount } = useWishlist();
+  const { count: cartCount, openCart } = useCart();
+
   const mainLinks: MenuItem[] = [
     { name: 'MEN', href: '/men' },
     { name: 'WOMEN', href: '/women' },
@@ -27,8 +34,8 @@ export default function MobileMenu({
     { name: 'LOYALTY', href: '/loyalty' },
     { name: 'SEARCH', href: '/search', action: 'search' },
     { name: 'ACCOUNT', href: '/account' },
-    { name: 'WISHLIST [0]', href: '/wishlist' },
-    { name: 'CART [0]', href: '/cart' },
+    { name: `WISHLIST [${wishlistCount}]`, href: '/wishlist' },
+    { name: `CART [${cartCount}]`, href: '/cart', action: 'cart' },
   ];
 
   const itemClass =
@@ -38,6 +45,12 @@ export default function MobileMenu({
   const openSearch = () => {
     onClose();
     window.dispatchEvent(new Event('open-search'));
+  };
+
+  // Menyunu bağla və səbət panelini aç (login yoxdursa /login-ə gedir)
+  const openCartPanel = () => {
+    onClose();
+    openCart();
   };
 
   return (
@@ -50,10 +63,15 @@ export default function MobileMenu({
       <div className="flex items-center justify-between px-5 py-4">
         <span className="text-2xl font-bold tracking-widest">OLAF</span>
         <div className="flex items-center gap-5">
-          <Link href="/cart" onClick={onClose} className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={openCartPanel}
+            aria-label="Cart"
+            className="flex items-center gap-1"
+          >
             <ShoppingBag size={20} strokeWidth={1.5} />
-            <span className="text-sm">[0]</span>
-          </Link>
+            <span className="text-sm">[{cartCount}]</span>
+          </button>
           <button onClick={onClose} aria-label="Close menu">
             <X size={24} strokeWidth={1.5} />
           </button>
@@ -62,18 +80,22 @@ export default function MobileMenu({
 
       {/* Link siyahısı */}
       <nav className="flex flex-col">
-        {mainLinks.map((link) =>
-          link.action === 'search' ? (
-            <button
-              key={link.name}
-              type="button"
-              onClick={openSearch}
-              className={itemClass}
-            >
-              {link.name}
-              <ArrowRight size={18} strokeWidth={1.5} />
-            </button>
-          ) : (
+        {mainLinks.map((link) => {
+          if (link.action) {
+            return (
+              <button
+                key={link.name}
+                type="button"
+                onClick={link.action === 'search' ? openSearch : openCartPanel}
+                className={itemClass}
+              >
+                {link.name}
+                <ArrowRight size={18} strokeWidth={1.5} />
+              </button>
+            );
+          }
+
+          return (
             <Link
               key={link.name}
               href={link.href}
@@ -83,8 +105,8 @@ export default function MobileMenu({
               {link.name}
               <ArrowRight size={18} strokeWidth={1.5} />
             </Link>
-          )
-        )}
+          );
+        })}
       </nav>
     </div>
   );
